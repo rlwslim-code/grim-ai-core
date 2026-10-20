@@ -28,7 +28,23 @@ async def lifespan(app):
         for executor in adapter.instances.values(): await executor.stop()
 
 app=FastAPI(title='GRIM AI — DARK GENESIS',version='1.3.1',lifespan=lifespan)
-app.add_middleware(CORSMiddleware,allow_origins=os.getenv('GRIM_ALLOWED_ORIGINS','http://localhost:5173').split(','),allow_credentials=False,allow_methods=['GET','POST','DELETE','PUT'],allow_headers=['Authorization','Content-Type'])
+# GRIM AI — CORS configuration
+allowed_origins = [
+    origin.strip().rstrip("/")
+    for origin in os.getenv(
+        "GRIM_ALLOWED_ORIGINS",
+        "http://localhost:5173"
+    ).split(",")
+    if origin.strip()
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
+)
 
 class AuthBody(BaseModel):
     email: str=Field(min_length=3,max_length=254)
