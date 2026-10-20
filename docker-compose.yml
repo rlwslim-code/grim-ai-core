@@ -1,0 +1,31 @@
+# Optional local container stack. Not executed in package verification.
+# Container execution/lab workers intentionally unavailable: no host Docker socket.
+services:
+  api:
+    build:
+      context: .
+      dockerfile: infra/Dockerfile.backend
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      GRIM_DATA_DIR: /data
+      GRIM_MODEL_BASE_URL: http://ollama:11434/v1
+      GRIM_MODEL: ${GRIM_MODEL:-qwen2.5:3b}
+      GRIM_ALLOWED_ORIGINS: ${GRIM_ALLOWED_ORIGINS:-http://localhost:5173}
+      GRIM_ALLOW_REGISTRATION: "0"
+    volumes:
+      - grim-data:/data
+    depends_on:
+      - ollama
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - ollama-data:/root/.ollama
+    # No publicly exposed inference port or GPU requirement.
+volumes:
+  grim-data:
+  ollama-data:
