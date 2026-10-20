@@ -4,7 +4,10 @@ from cryptography.fernet import Fernet
 
 ROOT = Path(os.getenv('GRIM_DATA_DIR', './data')).resolve()
 ROOT.mkdir(parents=True, exist_ok=True)
-os.chmod(ROOT, 0o700)
+try:
+    os.chmod(ROOT, 0o700)
+except PermissionError:
+    pass
 keypath = ROOT / 'memory.key'
 if not keypath.exists():
     fd = os.open(keypath, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
