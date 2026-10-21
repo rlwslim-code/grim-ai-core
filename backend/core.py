@@ -80,6 +80,8 @@ async def stream_chat(owner,message,conversation_id,mode):
             raise ValueError('Response size limit exceeded')
         yield {'event':'delta','text':chunk}
     response=''.join(chunks)
+    if not response.strip():
+        raise ProviderUnavailable('Inference completed without text', 'empty_response')
     for role, content in [('user',message),('assistant',response)]:
         db.write('INSERT INTO messages VALUES(?,?,?,?,?,?)',
                  (db.uid(),conversation_id,owner,role,db.seal(content),time.time()))

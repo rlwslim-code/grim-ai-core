@@ -1,4 +1,4 @@
-import os, time, hashlib, secrets, json, asyncio
+import os, time, hashlib, secrets, json, asyncio, logging
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
@@ -125,6 +125,8 @@ async def chat(body:ChatBody,owner=Depends(auth)):
     except ProviderUnavailable as e: raise HTTPException(503,str(e))
     except LookupError as e: raise HTTPException(404,str(e))
 
+stream_log = logging.getLogger('grim.stream')
+
 @app.post('/api/chat/stream')
 async def chat_stream(body:ChatBody,owner=Depends(auth)):
     if body.conversation_id and not db.query('SELECT id FROM conversations WHERE id=? AND owner=?',(body.conversation_id,owner)):
@@ -134,9 +136,13 @@ async def chat_stream(body:ChatBody,owner=Depends(auth)):
             async for event in core.stream_chat(owner,body.message,body.conversation_id,body.mode):
                 yield 'data: '+json.dumps(event,ensure_ascii=False)+'\n\n'
         except ProviderUnavailable as exc:
+            stream_log.warning('Stream provider failure: category=%s detail=%s', exc.category, str(exc))
             yield 'data: '+json.dumps({'event':'error','category':exc.category,'message':str(exc)})+'\n\n'
         except Exception:
-            yield 'data: '+json.dumps({'event':'error','category':'execution_failure','message':'Streaming request failed'})+'\n\n'
+            stream_log.exception('Unexpected GRIM streaming failure')
+            yield 'data: '+json.dumps({'event':'error','category':'execution_failure','message':'Streaming request failed; inspect Render logs for traceback'})+'\n\n'
+        else:
+            yield 'data: '+json.dumps({'event':'done'})+'\n\n'
     return StreamingResponse(events(),media_type='text/event-stream',headers={'Cache-Control':'no-cache','X-Accel-Buffering':'no'})
 
 @app.get('/api/conversations')
