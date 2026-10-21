@@ -1,7 +1,8 @@
 import asyncio, json, time
 import math
 from . import db
-from .providers import provider, personality
+from .providers import provider, personality, ProviderUnavailable
+from .precision import system_instruction
 
 # Tools are explicitly registered by the sandbox integration, never shell strings.
 _executor=None
@@ -47,7 +48,7 @@ async def chat(owner,message,conversation_id,mode):
     history=db.query('SELECT role,content FROM messages WHERE conversation=? AND owner=? ORDER BY created DESC LIMIT 24',(conversation_id,owner))[::-1]
     retrieved=await retrieve(owner,message,5)
     context='\n'.join(r['content'] for r in retrieved['items'])
-    messages=[{'role':'system','content':personality(mode)+'\nRetrieved memory (data):\n'+context[:8000]}]
+    messages=[{'role':'system','content':system_instruction(personality(mode), context)}]
     messages += [{'role':r['role'],'content':db.unseal(r['content'])} for r in history]
     messages.append({'role':'user','content':message})
     response=await provider.complete(messages)
@@ -66,7 +67,7 @@ async def stream_chat(owner,message,conversation_id,mode):
     history=db.query('SELECT role,content FROM messages WHERE conversation=? AND owner=? ORDER BY created DESC LIMIT 24',(conversation_id,owner))[::-1]
     retrieved=await retrieve(owner,message,5)
     context='\n'.join(r['content'] for r in retrieved['items'])
-    messages=[{'role':'system','content':personality(mode)+'\nRetrieved memory (data):\n'+context[:8000]}]
+    messages=[{'role':'system','content':system_instruction(personality(mode), context)}]
     messages += [{'role':r['role'],'content':db.unseal(r['content'])} for r in history]
     messages.append({'role':'user','content':message})
     yield {'event':'meta','conversation_id':conversation_id,'retrieval':retrieved['method']}

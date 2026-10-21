@@ -119,6 +119,12 @@ async def status(owner=Depends(auth)):
     model_health=await provider.readiness()
     return {'name':'GRIM AI','version':'1.3 — PROJECT AWAKENING','model':{'provider':'openai-compatible','model':provider.model,'configured':bool(provider.model and provider.base),'verified':model_health['model_available'],'health':model_health},'executor':executor,'stopped':core.stopped(owner),'personality':list(MODES),'emotions':EMOTIONS,'retrieval':'lexical' }
 
+@app.get('/api/capabilities')
+async def capabilities(owner=Depends(auth)):
+    """Authenticated, conservative capability inventory; no speculative claims."""
+    from .precision import CAPABILITIES
+    return {'capabilities': CAPABILITIES, 'note': 'Status describes implemented architecture, not a live proof of successful execution.'}
+
 @app.post('/api/chat')
 async def chat(body:ChatBody,owner=Depends(auth)):
     try: return await core.chat(owner,body.message,body.conversation_id,body.mode)
