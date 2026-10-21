@@ -6,12 +6,12 @@ def test_obsidian_never_instructs_apologies_or_emotion():
     assert 'do not apologize' in prompt
     assert 'no simulated emotions' in prompt
     assert 'do not call yourself an instrument' in prompt
-    assert 'do not pretend a chat message changed the setting' in prompt
+    assert 'do not claim a change unless confirmed' in prompt
     assert EMOTIONS['OBSIDIAN']['intensity'] == 0
 
 
 def test_other_modes_remain_available():
-    assert {'OBSIDIAN', 'BLOODLINE', 'ABYSS'} == set(MODES)
+    assert {'NORMAL', 'OBSIDIAN', 'BLOODLINE', 'ABYSS'} == set(MODES)
     assert 'execution-focused' in personality('BLOODLINE')
 
 
