@@ -53,7 +53,7 @@ async def chat(owner,message,conversation_id,mode):
     response=await provider.complete(messages)
     for role,content in [('user',message),('assistant',response)]:
         db.write('INSERT INTO messages VALUES(?,?,?,?,?,?)',(db.uid(),conversation_id,owner,role,db.seal(content),time.time()))
-    return {'conversation_id':conversation_id,'message':response,'mode':mode,'emotion_simulated':mode != 'OBSIDIAN','retrieval':retrieved['method']}
+    return {'conversation_id':conversation_id,'message':response,'mode':mode,'emotion_simulated':mode == 'NORMAL','retrieval':retrieved['method']}
 
 async def stream_chat(owner,message,conversation_id,mode):
     """Stream only genuine model output; persist completed responses, not broken generations."""

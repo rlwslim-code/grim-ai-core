@@ -52,7 +52,7 @@ class AuthBody(BaseModel):
 class ChatBody(BaseModel):
     message: str=Field(min_length=1,max_length=16000)
     conversation_id: str|None=None
-    mode: Literal['OBSIDIAN','BLOODLINE','ABYSS']='OBSIDIAN'
+    mode: Literal['NORMAL','OBSIDIAN','BLOODLINE','ABYSS']='OBSIDIAN'
 class MemoryBody(BaseModel):
     content: str=Field(min_length=1,max_length=32000)
     kind: str=Field(default='note',max_length=50)
