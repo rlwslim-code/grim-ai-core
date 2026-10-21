@@ -347,7 +347,10 @@ class ModelProvider:
                 for item in payload.get('data', [])
                 if isinstance(item, dict)
             ]
-
+            log.info(
+               "GRIM available inference models: %s",
+               json.dumps(available[:30])
+               )
             found = self.model in available
 
             return {
