@@ -45,10 +45,54 @@ def classify_error(exc):
 
 
 def diagnostic(exc):
-    # Never log exception strings, response bodies,
-    # request URLs or headers. These can contain
-    # credentials or user conversation content.
+    if isinstance(exc, httpx.HTTPStatusError):
+        status = exc.response.status_code
 
+        try:
+            payload = exc.response.json()
+            error = payload.get("error", {})
+
+            if isinstance(error, dict):
+                provider_status = str(
+                    error.get("status", "unknown")
+                )
+
+                message = str(
+                    error.get("message", "")
+                )
+
+                # Only expose a restricted set of diagnostic
+                # characters. Never print raw responses,
+                # request URLs, headers or credentials.
+                import re
+
+                message = re.sub(
+                    r"[^a-zA-Z0-9 .,_:/()-]",
+                    "",
+                    message
+                )[:300]
+
+                return (
+                    f"http_{status} "
+                    f"provider_status={provider_status[:60]} "
+                    f"message={message}"
+                )
+
+        except (ValueError, TypeError, AttributeError):
+            pass
+
+        return f"http_{status}"
+
+    if isinstance(exc, httpx.TimeoutException):
+        return "timeout"
+
+    if isinstance(exc, httpx.ConnectError):
+        return "connection_failed"
+
+    if isinstance(exc, httpx.NetworkError):
+        return "network_failed"
+
+    return type(exc).__name__
     if isinstance(exc, httpx.HTTPStatusError):
         return f'http_{exc.response.status_code}'
 
