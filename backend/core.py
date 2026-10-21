@@ -71,23 +71,19 @@ async def stream_chat(owner,message,conversation_id,mode):
     messages.append({'role':'user','content':message})
     yield {'event':'meta','conversation_id':conversation_id,'retrieval':retrieved['method']}
     chunks=[]
-total_chars=0
-
-print("GRIM STREAM: Model generation started", flush=True)
-
-async for chunk in provider.stream(messages):
-    chunks.append(chunk)
-    total_chars += len(chunk)
-
-    if total_chars > 64000:
-        raise ValueError('Response size limit exceeded')
-
-    yield {'event':'delta','text':chunk}
-
-print(
-    f"GRIM STREAM: Generation completed; characters={total_chars}",
-    flush=True
-)
+    total_chars=0
+    print("GRIM STREAM: Model generation started", flush=True)
+    async for chunk in provider.stream(messages):
+        chunks.append(chunk)
+        total_chars += len(chunk)
+        if total_chars > 64000:
+            raise ValueError('Response size limit exceeded')
+        yield {'event':'delta','text':chunk}
+    response=''.join(chunks)
+    for role, content in [('user',message),('assistant',response)]:
+        db.write('INSERT INTO messages VALUES(?,?,?,?,?,?)',
+                 (db.uid(),conversation_id,owner,role,db.seal(content),time.time()))
+    print(f"GRIM STREAM: Generation completed; characters={total_chars}", flush=True)
 
 
 async def plan(command):
