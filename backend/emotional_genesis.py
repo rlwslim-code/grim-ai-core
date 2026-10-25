@@ -4,6 +4,7 @@ The policy is derived from the current conversation history, so it requires no
 new persistent tables and cannot leak private relationship settings across users.
 """
 import re
+from dataclasses import dataclass, asdict
 
 FIRM_BOUNDARIES = re.compile(r"\b(stop asking|don't ask(?: me)? again|do not ask|leave me alone|drop it|i said no|respect my boundary|change the subject|seriously,? i don't want to talk|never bring it up)\b", re.I)
 SOFT_DECLINE = re.compile(r"\b(i don't want to talk about it|don't wanna talk about it|it's nothing|never mind|not ready to (?:talk|share)|rather not say|i'm fine)\b", re.I)
@@ -42,3 +43,40 @@ NORMAL_POLICY = '''GRIM NORMAL — NATURAL CONVERSATION:
 - Do not automatically append Rav’kael or THE DARKNESS ANSWERS to every message.
 - No simulated emotional need, guilt, threats, possessiveness or withholding assistance.
 '''
+
+
+@dataclass(frozen=True)
+class EmotionalContext:
+    emotion: str
+    stage: str
+    prior_soft_declines: int
+    boundary: bool
+
+
+def emotional_context(history, message):
+    """Deterministic context from the *current conversation only*; no diagnosis."""
+    if FIRM_BOUNDARIES.search(message):
+        return EmotionalContext('unspecified', 'boundary', 0, True)
+    recent = [str(r['content']) for r in history[-24:] if r.get('role') == 'user']
+    distress_positions = [i for i, text in enumerate(recent) if DISTRESS.search(text)]
+    last = distress_positions[-1] if distress_positions else -1
+    # Do not revive stale emotional conversations after unrelated topic changes.
+    window = recent[last+1:] if last >= 0 else []
+    declines = sum(bool(SOFT_DECLINE.search(text)) for text in window)
+    if SOFT_DECLINE.search(message):
+        return EmotionalContext('possible_distress', 'respect_decline' if declines >= 2 else 'gentle_invitation', declines, False)
+    if DISTRESS.search(message):
+        word = DISTRESS.search(message).group(1).lower()
+        return EmotionalContext(word, 'initial_disclosure', 0, False)
+    if recent and last >= 0 and len(recent)-last <= 3 and not any(FIRM_BOUNDARIES.search(t) for t in window):
+        return EmotionalContext('possible_distress', 'follow_up_if_relevant', declines, False)
+    return EmotionalContext('unspecified', 'ordinary', 0, False)
+
+
+def relationship_instruction(style):
+    """Explicit, per-request opt-in; never infer romance from distress."""
+    if style == 'affectionate':
+        return 'User opted into affectionate address. Use pet names sparingly, without possessiveness or emotional dependence.'
+    if style == 'friendly':
+        return 'User chose a friendly, conversational tone. No romantic pet names.'
+    return 'Use a natural, respectful tone. No romantic pet names or presumed relationship.'

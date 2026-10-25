@@ -53,6 +53,7 @@ class ChatBody(BaseModel):
     message: str=Field(min_length=1,max_length=16000)
     conversation_id: str|None=None
     mode: Literal['NORMAL','OBSIDIAN','BLOODLINE','ABYSS']='OBSIDIAN'
+    relationship_style: Literal['neutral','friendly','affectionate']='neutral'
 class MemoryBody(BaseModel):
     content: str=Field(min_length=1,max_length=32000)
     kind: str=Field(default='note',max_length=50)
@@ -125,9 +126,49 @@ async def capabilities(owner=Depends(auth)):
     from .precision import CAPABILITIES
     return {'capabilities': CAPABILITIES, 'note': 'Status describes implemented architecture, not a live proof of successful execution.'}
 
+class CompanionPreferencesBody(BaseModel):
+    relationship_style: Literal['neutral','friendly','affectionate']='neutral'
+    memory_enabled: bool=False
+
+class CompanionMemoryBody(BaseModel):
+    content: str=Field(min_length=1,max_length=2000)
+
+@app.get('/api/companion/preferences')
+def companion_preferences(owner=Depends(auth)):
+    rows=db.query('SELECT relationship_style,memory_enabled FROM companion_preferences WHERE owner=?',(owner,))
+    return dict(rows[0],memory_enabled=bool(rows[0]['memory_enabled'])) if rows else {'relationship_style':'neutral','memory_enabled':False}
+
+@app.put('/api/companion/preferences')
+def update_companion_preferences(body:CompanionPreferencesBody,owner=Depends(auth)):
+    db.write('INSERT INTO companion_preferences(owner,relationship_style,memory_enabled,updated) VALUES(?,?,?,?) ON CONFLICT(owner) DO UPDATE SET relationship_style=excluded.relationship_style,memory_enabled=excluded.memory_enabled,updated=excluded.updated', (owner,body.relationship_style,int(body.memory_enabled),time.time()))
+    db.audit(owner,'companion.preferences_updated')
+    return {'relationship_style':body.relationship_style,'memory_enabled':body.memory_enabled}
+
+@app.get('/api/companion/memories')
+def companion_memories(owner=Depends(auth)):
+    rows=db.query('SELECT id,content,created FROM companion_memories WHERE owner=? ORDER BY created DESC LIMIT 100',(owner,))
+    return [dict(row,content=db.unseal(row['content'])) for row in rows]
+
+@app.post('/api/companion/memories')
+def add_companion_memory(body:CompanionMemoryBody,owner=Depends(auth)):
+    preferences=companion_preferences(owner)
+    if not preferences['memory_enabled']: raise HTTPException(403,'Companion memory is disabled')
+    mid=db.uid()
+    db.write('INSERT INTO companion_memories VALUES(?,?,?,?)',(mid,owner,db.seal(body.content),time.time()))
+    db.audit(owner,'companion.memory_added')
+    return {'id':mid}
+
+@app.delete('/api/companion/memories/{memory_id}')
+def delete_companion_memory(memory_id:str,owner=Depends(auth)):
+    rows=db.query('SELECT id FROM companion_memories WHERE id=? AND owner=?',(memory_id,owner))
+    if not rows: raise HTTPException(404,'Memory not found')
+    db.write('DELETE FROM companion_memories WHERE id=? AND owner=?',(memory_id,owner))
+    db.audit(owner,'companion.memory_deleted')
+    return {'ok':True}
+
 @app.post('/api/chat')
 async def chat(body:ChatBody,owner=Depends(auth)):
-    try: return await core.chat(owner,body.message,body.conversation_id,body.mode)
+    try: return await core.chat(owner,body.message,body.conversation_id,body.mode,body.relationship_style)
     except ProviderUnavailable as e: raise HTTPException(503,str(e))
     except LookupError as e: raise HTTPException(404,str(e))
 
@@ -139,7 +180,7 @@ async def chat_stream(body:ChatBody,owner=Depends(auth)):
         raise HTTPException(404,'Conversation not found')
     async def events():
         try:
-            async for event in core.stream_chat(owner,body.message,body.conversation_id,body.mode):
+            async for event in core.stream_chat(owner,body.message,body.conversation_id,body.mode,body.relationship_style):
                 yield 'data: '+json.dumps(event,ensure_ascii=False)+'\n\n'
         except ProviderUnavailable as exc:
             stream_log.warning('Stream provider failure: category=%s detail=%s', exc.category, str(exc))
